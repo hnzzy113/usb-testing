@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>USB通信调试工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b',
+                        info: '#06b6d4',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .text-shadow {
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .bg-gradient-primary {
+                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-inter text-gray-800 min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="bg-gradient-primary text-white shadow-lg z-10">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-usb text-2xl"></i>
+                <h1 class="text-xl font-bold tracking-tight text-shadow">USB通信调试工具</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-white/20 transition-colors">
+                    <i class="fa fa-moon-o"></i>
+                </button>
+                <button id="help-btn" class="p-2 rounded-full hover:bg-white/20 transition-colors">
+                    <i class="fa fa-question-circle"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 container mx-auto px-4 py-6 flex flex-col lg:flex-row gap-6">
+        <!-- 左侧面板：设备控制和设置 -->
+        <div class="lg:w-1/4 space-y-6">
+            <!-- 设备连接面板 -->
+            <div class="bg-white rounded-xl shadow-md p-5 transform hover:shadow-lg transition-all duration-300">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-plug text-primary mr-2"></i>设备连接
+                </h2>
+                <div class="space-y-4">
+                    <button id="connect-btn" class="w-full bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg shadow flex items-center justify-center transition-all duration-200 transform hover:scale-[1.02]">
+                        <i class="fa fa-link mr-2"></i>连接USB设备
+                    </button>
+                    <div id="device-info" class="hidden bg-gray-50 p-3 rounded-lg border border-gray-200">
+                        <h3 class="font-medium text-sm text-gray-700 mb-2">已连接设备</h3>
+                        <div class="space-y-1 text-xs text-gray-600">
+                            <p><span class="font-medium">名称:</span> <span id="device-name">未知设备</span></p>
+                            <p><span class="font-medium">厂商ID:</span> <span id="device-vid">0x0000</span></p>
+                            <p><span class="font-medium">产品ID:</span> <span id="device-pid">0x0000</span></p>
+                        </div>
+                        <button id="disconnect-btn" class="mt-3 w-full bg-gray-200 hover:bg-gray-300 text-gray-700 py-1.5 px-3 rounded-lg text-sm transition-colors">
+                            <i class="fa fa-unlink mr-1"></i>断开连接
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 通信设置面板 -->
+            <div class="bg-white rounded-xl shadow-md p-5 transform hover:shadow-lg transition-all duration-300">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-sliders text-primary mr-2"></i>通信设置
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">数据格式</label>
+                        <div class="flex">
+                            <button id="format-text" class="flex-1 py-2 px-4 bg-primary text-white rounded-l-lg">文本</button>
+                            <button id="format-hex" class="flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-r-lg">Hex</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="baud-rate" class="block text-sm font-medium text-gray-700 mb-1">波特率</label>
+                        <select id="baud-rate" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                            <option value="9600">9600</option>
+                            <option value="115200" selected>115200</option>
+                            <option value="230400">230400</option>
+                            <option value="460800">460800</option>
+                            <option value="921600">921600</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label for="data-bits" class="block text-sm font-medium text-gray-700 mb-1">数据位</label>
+                            <select id="data-bits" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                                <option value="7">7</option>
+                                <option value="8" selected>8</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="stop-bits" class="block text-sm font-medium text-gray-700 mb-1">停止位</label>
+                            <select id="stop-bits" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                                <option value="1" selected>1</option>
+                                <option value="2">2</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="parity" class="block text-sm font-medium text-gray-700 mb-1">校验位</label>
+                        <select id="parity" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary">
+                            <option value="none" selected>无</option>
+                            <option value="even">偶校验</option>
+                            <option value="odd">奇校验</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 右侧面板：数据收发 -->
+        <div class="lg:w-3/4 space-y-6">
+            <!-- 通信日志面板 -->
+            <div class="bg-white rounded-xl shadow-md p-5 flex flex-col h-[400px] transform hover:shadow-lg transition-all duration-300">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold flex items-center">
+                        <i class="fa fa-history text-primary mr-2"></i>通信日志
+                    </h2>
+                    <div class="flex space-x-2">
+                        <button id="clear-log" class="p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors">
+                            <i class="fa fa-trash-o"></i>
+                        </button>
+                        <button id="auto-scroll" class="p-1.5 bg-primary text-white rounded transition-colors">
+                            <i class="fa fa-angle-down"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="log-container" class="flex-1 overflow-y-auto bg-gray-50 rounded-lg p-3 scrollbar-hide border border-gray-200">
+                    <div id="log-messages" class="space-y-2 text-sm font-mono">
+                        <p class="text-gray-500 italic">等待连接USB设备...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 数据发送面板 -->
+            <div class="bg-white rounded-xl shadow-md p-5 transform hover:shadow-lg transition-all duration-300">
+                <h2 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fa fa-paper-plane text-primary mr-2"></i>数据发送
+                </h2>
+                <div class="space-y-4">
+                    <div>
+                        <label for="send-data" class="block text-sm font-medium text-gray-700 mb-1">发送内容</label>
+                        <textarea id="send-data" rows="3" class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary" placeholder="输入要发送的数据...">Hello, USB!</textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="flex items-center space-x-2 text-sm text-gray-700">
+                                <input type="checkbox" id="append-crlf" class="rounded text-primary focus:ring-primary/50" checked>
+                                <span>自动添加换行</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="flex items-center space-x-2 text-sm text-gray-700">
+                                <input type="checkbox" id="echo-mode" class="rounded text-primary focus:ring-primary/50">
+                                <span>回显模式</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button id="send-btn" class="w-full bg-primary hover:bg-primary/90 text-white py-2.5 px-4 rounded-lg shadow flex items-center justify-center transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fa fa-send mr-2"></i>发送数据
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-4 mt-8">
+        <div class="container mx-auto px-4 text-center text-sm">
+            <p>© 2025 USB通信调试工具 | 使用WebUSB API构建</p>
+        </div>
+    </footer>
+
+    <!-- 帮助模态框 -->
+    <div id="help-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-5 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-lg font-semibold">使用帮助</h3>
+                    <button id="close-help" class="text-gray-500 hover:text-gray-700">
+                        <i class="fa fa-times"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="p-5 space-y-4">
+                <div>
+                    <h4 class="font-medium text-primary mb-2">连接设备</h4>
+                    <p class="text-gray-700">点击"连接USB设备"按钮，选择要连接的USB设备。确保设备已启用WebUSB支持。</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-primary mb-2">数据格式</h4>
+                    <p class="text-gray-700">支持"文本"和"Hex"两种格式。Hex格式需要输入两位一组的十六进制值，如：48 65 6C 6C 6F。</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-primary mb-2">发送数据</h4>
+                    <p class="text-gray-700">在输入框中输入要发送的数据，点击"发送数据"按钮。勾选"自动添加换行"会在数据末尾添加\r\n。</p>
+                </div>
+                <div>
+                    <h4 class="font-medium text-primary mb-2">通信日志</h4>
+                    <p class="text-gray-700">显示所有发送和接收的数据，包括时间戳。点击"清空"按钮可清除日志，点击"自动滚动"可保持跟随最新消息。</p>
+                </div>
+            </div>
+            <div class="p-5 border-t border-gray-200">
+                <button id="got-it" class="w-full bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg transition-colors">
+                    我知道了
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let usbDevice = null;
+        let isConnected = false;
+        let isHexFormat = false;
+        let isAutoScroll = true;
+        let isEchoMode = false;
+        
+        // DOM元素
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const deviceInfo = document.getElementById('device-info');
+        const deviceName = document.getElementById('device-name');
+        const deviceVid = document.getElementById('device-vid');
+        const devicePid = document.getElementById('device-pid');
+        const sendBtn = document.getElementById('send-btn');
+        const sendData = document.getElementById('send-data');
+        const appendCrlf = document.getElementById('append-crlf');
+        const echoMode = document.getElementById('echo-mode');
+        const logMessages = document.getElementById('log-messages');
+        const clearLog = document.getElementById('clear-log');
+        const autoScroll = document.getElementById('auto-scroll');
+        const formatText = document.getElementById('format-text');
+        const formatHex = document.getElementById('format-hex');
+        const helpBtn = document.getElementById('help-btn');
+        const helpModal = document.getElementById('help-modal');
+        const closeHelp = document.getElementById('close-help');
+        const gotIt = document.getElementById('got-it');
+        const themeToggle = document.getElementById('theme-toggle');
+        const logContainer = document.getElementById('log-container');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 检查浏览器是否支持WebUSB
+            if (!navigator.usb) {
+                appendLog('错误：您的浏览器不支持WebUSB API。请使用Chrome、Edge或Opera等支持WebUSB的浏览器。', 'error');
+                connectBtn.disabled = true;
+            }
+            
+            // 事件监听器
+            connectBtn.addEventListener('click', connectDevice);
+            disconnectBtn.addEventListener('click', disconnectDevice);
+            sendBtn.addEventListener('click', sendDataToDevice);
+            clearLog.addEventListener('click', clearLogMessages);
+            autoScroll.addEventListener('click', toggleAutoScroll);
+            formatText.addEventListener('click', setTextFormat);
+            formatHex.addEventListener('click', setHexFormat);
+            helpBtn.addEventListener('click', showHelp);
+            closeHelp.addEventListener('click', hideHelp);
+            gotIt.addEventListener('click', hideHelp);
+            themeToggle.addEventListener('click', toggleTheme);
+            echoMode.addEventListener('change', () => { isEchoMode = echoMode.checked; });
+            
+            // 按Enter发送数据
+            sendData.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (isConnected) sendDataToDevice();
+                }
+            });
+            
+            // 初始化示例数据
+            updateSendButtonState();
+        });
+        
+        // 连接USB设备
+        async function connectDevice() {
+            try {
+                // 请求设备
+                const filters = [
+                    { vendorId: 0x0403 }, // FTDI
+                    { vendorId: 0x1a86 }, // CH340
+                    { vendorId: 0x0483 }, // STMicroelectronics
+                    // 添加更多常见USB设备的vendorId和productId
+                ];
+                
+                const device = await navigator.usb.requestDevice({ filters });
+                if (!device) {
+                    appendLog('未选择任何设备', 'info');
+                    return;
+                }
+                
+                // 连接设备
+                await device.open();
+                
+                // 设置配置
+                if (device.configuration === null) {
+                    await device.selectConfiguration(1);
+                }
+                
+                // 声称接口
+                const interfaces = device.configuration.interfaces;
+                let claimed = false;
+                
+                for (const iface of interfaces) {
+                    try {
+                        await device.claimInterface(iface.interfaceNumber);
+                        claimed = true;
+                        break;
+                    } catch (error) {
+                        console.warn(`无法声称接口 ${iface.interfaceNumber}:`, error);
+                    }
+                }
+                
+                if (!claimed) {
+                    throw new Error('无法声称任何接口');
+                }
+                
+                // 配置串口参数
+                const baudRate = parseInt(document.getElementById('baud-rate').value);
+                const dataBits = parseInt(document.getElementById('data-bits').value);
+                const stopBits = parseInt(document.getElementById('stop-bits').value);
+                const parity = document.getElementById('parity').value;
+                
+                // 某些设备需要控制信号
+                await device.controlTransferOut({
+                    requestType: 'class',
+                    recipient: 'interface',
+                    request: 0x22,
+                    value: 0x01,
+                    index: 0x00
+                });
+                
+                // 存储设备并更新UI
+                usbDevice = device;
+                isConnected = true;
+                
+                deviceName.textContent = device.productName || '未知设备';
+                deviceVid.textContent = `0x${device.vendorId.toString(16).padStart(4, '0')}`;
+                devicePid.textContent = `0x${device.productId.toString(16).padStart(4, '0')}`;
+                
+                deviceInfo.classList.remove('hidden');
+                connectBtn.disabled = true;
+                sendBtn.disabled = false;
+                
+                appendLog(`已连接到设备: ${device.productName || '未知设备'} (0x${device.vendorId.toString(16)}, 0x${device.productId.toString(16)})`, 'success');
+                appendLog(`波特率: ${baudRate}, 数据位: ${dataBits}, 停止位: ${stopBits}, 校验位: ${parity}`, 'info');
+                
+                // 开始接收数据
+                receiveData();
+            } catch (error) {
+                appendLog(`连接失败: ${error.message}`, 'error');
+                console.error('USB连接错误:', error);
+            }
+        }
+        
+        // 断开USB设备
+        async function disconnectDevice() {
+            if (!usbDevice) return;
+            
+            try {
+                // 关闭设备
+                await usbDevice.close();
+                
+                // 更新UI
+                isConnected = false;
+                deviceInfo.classList.add('hidden');
+                connectBtn.disabled = false;
+                sendBtn.disabled = true;
+                
+                appendLog('已断开与设备的连接', 'info');
+            } catch (error) {
+                appendLog(`断开连接失败: ${error.message}`, 'error');
+                console.error('USB断开连接错误:', error);
+            } finally {
+                usbDevice = null;
+            }
+        }
+        
+        // 发送数据到设备
+        async function sendDataToDevice() {
+            if (!isConnected || !usbDevice) {
+                appendLog('错误：未连接到任何设备', 'error');
+                return;
+            }
+            
+            try {
+                let data = sendData.value.trim();
+                
+                // 添加换行符
+                if (appendCrlf.checked) {
+                    data += '\r\n';
+                }
+                
+                // 转换数据格式
+                let buffer;
+                if (isHexFormat) {
+                    // 处理Hex格式
+                    const hexString = data.replace(/\s+/g, '');
+                    if (hexString.length % 2 !== 0) {
+                        appendLog('错误：Hex格式必须是两位一组的十六进制值', 'error');
+                        return;
+                    }
+                    
+                    buffer = new Uint8Array(hexString.length / 2);
+                    for (let i = 0; i < hexString.length; i += 2) {
+                        buffer[i / 2] = parseInt(hexString.substr(i, 2), 16);
+                    }
+                } else {
+                    // 处理文本格式
+                    buffer = new TextEncoder().encode(data);
+                }
+                
+                // 发送数据
+                const result = await usbDevice.transferOut(1, buffer);
+                appendLog(`发送: ${isHexFormat ? formatHexData(buffer) : data}`, 'send');
+                
+                // 如果是回显模式，立即接收数据
+                if (isEchoMode) {
+                    receiveData();
+                }
+            } catch (error) {
+                appendLog(`发送失败: ${error.message}`, 'error');
+                console.error('USB发送错误:', error);
+            }
+        }
+        
+        // 接收设备数据
+        async function receiveData() {
+            if (!isConnected || !usbDevice) return;
+            
+            try {
+                // 接收数据 (端点1通常用于IN)
+                const result = await usbDevice.transferIn(1, 64);
+                
+                if (result.status === 'ok') {
+                    const data = new Uint8Array(result.data.buffer);
+                    
+                    // 转换数据格式
+                    let message;
+                    if (isHexFormat) {
+                        message = formatHexData(data);
+                    } else {
+                        message = new TextDecoder().decode(data);
+                    }
+                    
+                    appendLog(`接收: ${message}`, 'receive');
+                }
+                
+                // 继续接收下一个数据
+                receiveData();
+            } catch (error) {
+                if (isConnected) {
+                    appendLog(`接收失败: ${error.message}`, 'error');
+                    console.error('USB接收错误:', error);
+                }
+            }
+        }
+        
+        // 格式化Hex数据
+        function formatHexData(data) {
+            return Array.from(data)
+                .map(byte => byte.toString(16).padStart(2, '0'))
+                .join(' ');
+        }
+        
+        // 添加日志消息
+        function appendLog(message, type) {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString();
+            
+            const logEntry = document.createElement('div');
+            logEntry.className = `p-1.5 rounded ${getLogClass(type)}`;
+            
+            // 根据消息类型设置图标和样式
+            let iconClass = '';
+            switch (type) {
+                case 'send':
+                    iconClass = 'fa-paper-plane text-blue-500';
+                    break;
+                case 'receive':
+                    iconClass = 'fa-download text-green-500';
+                    break;
+                case 'error':
+                    iconClass = 'fa-exclamation-circle text-red-500';
+                    break;
+                case 'success':
+                    iconClass = 'fa-check-circle text-green-500';
+                    break;
+                default:
+                    iconClass = 'fa-info-circle text-gray-500';
+            }
+            
+            logEntry.innerHTML = `
+                <span class="text-xs text-gray-500">${timeString}</span>
+                <i class="fa ${iconClass} ml-1 mr-2"></i>
+                <span>${message}</span>
+            `;
+            
+            logMessages.appendChild(logEntry);
+            
+            // 自动滚动到底部
+            if (isAutoScroll) {
+                logContainer.scrollTop = logContainer.scrollHeight;
+            }
+        }
+        
+        // 获取日志类型对应的CSS类
+        function getLogClass(type) {
+            switch (type) {
+                case 'send':
+                    return 'bg-blue-50 border-l-4 border-blue-400';
+                case 'receive':
+                    return 'bg-green-50 border-l-4 border-green-400';
+                case 'error':
+                    return 'bg-red-50 border-l-4 border-red-400';
+                case 'success':
+                    return 'bg-green-50 border-l-4 border-green-400';
+                default:
+                    return 'bg-gray-50 border-l-4 border-gray-400';
+            }
+        }
+        
+        // 清空日志
+        function clearLogMessages() {
+            logMessages.innerHTML = '';
+            appendLog('日志已清空', 'info');
+        }
+        
+        // 切换自动滚动
+        function toggleAutoScroll() {
+            isAutoScroll = !isAutoScroll;
+            autoScroll.className = isAutoScroll 
+                ? 'p-1.5 bg-primary text-white rounded transition-colors' 
+                : 'p-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-colors';
+        }
+        
+        // 设置文本格式
+        function setTextFormat() {
+            isHexFormat = false;
+            formatText.className = 'flex-1 py-2 px-4 bg-primary text-white rounded-l-lg';
+            formatHex.className = 'flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-r-lg';
+        }
+        
+        // 设置Hex格式
+        function setHexFormat() {
+            isHexFormat = true;
+            formatText.className = 'flex-1 py-2 px-4 bg-gray-200 text-gray-700 rounded-l-lg';
+            formatHex.className = 'flex-1 py-2 px-4 bg-primary text-white rounded-r-lg';
+        }
+        
+        // 显示帮助模态框
+        function showHelp() {
+            helpModal.classList.remove('hidden');
+            helpModal.classList.add('flex');
+        }
+        
+        // 隐藏帮助模态框
+        function hideHelp() {
+            helpModal.classList.remove('flex');
+            helpModal.classList.add('hidden');
+        }
+        
+        // 切换主题 (预留功能)
+        function toggleTheme() {
+            // 这里只是切换图标，完整的主题切换功能需要更多代码
+            const icon = themeToggle.querySelector('i');
+            if (icon.classList.contains('fa-moon-o')) {
+                icon.classList.remove('fa-moon-o');
+                icon.classList.add('fa-sun-o');
+            } else {
+                icon.classList.remove('fa-sun-o');
+                icon.classList.add('fa-moon-o');
+            }
+        }
+        
+        // 更新发送按钮状态
+        function updateSendButtonState() {
+            sendBtn.disabled = !isConnected || sendData.value.trim() === '';
+        }
+        
+        // 监听发送框变化
+        sendData.addEventListener('input', updateSendButtonState);
+    </script>
+</body>
+</html>
+    
